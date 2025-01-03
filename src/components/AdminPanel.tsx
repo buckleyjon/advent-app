@@ -3,18 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { useCalendarData } from '../hooks/useCalendarData';
 import { useAuth } from '../hooks/useAuth';
 import { WindowContent } from '../lib/storage';
-import { format } from 'date-fns';
 import { Home, LogOut } from 'lucide-react';
-import { ImageUpload } from './ImageUpload';
+import { SettingsForm } from './admin/SettingsForm';
+import { WindowsList } from './admin/WindowsList';
 import { DangerZone } from './DangerZone';
+import { generateDateRange } from '../lib/dateUtils';
 
 export function AdminPanel() {
   const navigate = useNavigate();
-  const { settings, windows, updateSettings, updateWindows } = useCalendarData();
+  const { settings, windows, updateSettings, updateWindows, loading } = useCalendarData();
   const { isAuthenticated, logout } = useAuth();
   const [startDate, setStartDate] = useState(settings?.startDate || '');
   const [endDate, setEndDate] = useState(settings?.endDate || '');
+  const [title, setTitle] = useState(settings?.title || 'Advent Calendar');
   const [saved, setSaved] = useState(false);
+  const [localWindows, setLocalWindows] = useState<WindowContent[]>([]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -22,26 +25,40 @@ export function AdminPanel() {
     }
   }, [isAuthenticated, navigate]);
 
-  function handleSaveSettings() {
-    updateSettings({ startDate, endDate });
-    
-    const existingDates = new Set(windows.map(w => w.date));
-    const newWindows = [...windows];
-    
-    let currentDate = new Date(startDate);
-    const end = new Date(endDate);
-    
-    while (currentDate <= end) {
-      const dateStr = format(currentDate, 'yyyy-MM-dd');
-      if (!existingDates.has(dateStr)) {
-        newWindows.push({ date: dateStr, content: '' });
-      }
-      currentDate.setDate(currentDate.getDate() + 1);
+  useEffect(() => {
+    if (windows.length > 0) {
+      setLocalWindows(windows);
     }
-    
-    updateWindows(newWindows);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  }, [windows]);
+
+  useEffect(() => {
+    if (settings) {
+      setStartDate(settings.startDate);
+      setEndDate(settings.endDate);
+      setTitle(settings.title);
+    }
+  }, [settings]);
+
+  async function handleSaveSettings() {
+    try {
+      await updateSettings({ startDate, endDate, title });
+      
+      const newWindows = generateDateRange(startDate, endDate);
+      const existingContent = new Map(localWindows.map(w => [w.date, w]));
+      const mergedWindows = newWindows.map(window => ({
+        ...window,
+        ...existingContent.get(window.date)
+      }));
+
+      setLocalWindows(mergedWindows);
+      await updateWindows(mergedWindows);
+      
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      alert('Failed to save settings. Please try again.');
+    }
   }
 
   function handleLogout() {
@@ -50,99 +67,58 @@ export function AdminPanel() {
   }
 
   function handleUpdateWindow(window: WindowContent, updates: Partial<WindowContent>) {
-    const newWindows = windows.map(w => 
+    const newWindows = localWindows.map(w => 
       w.date === window.date ? { ...w, ...updates } : w
     );
+    setLocalWindows(newWindows);
     updateWindows(newWindows);
+  }
+
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
 
   return (
     <div className="max-w-4xl mx-auto p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Admin Panel</h2>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-2xl font-bold">Admin Panel</h1>
         <div className="flex gap-4">
-          {saved && (
-            <span className="text-green-600 flex items-center">
-              Changes saved!
-            </span>
-          )}
           <button
             onClick={() => navigate('/')}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
           >
             <Home className="w-4 h-4" />
-            <span>Back to Calendar</span>
+            View Calendar
           </button>
           <button
             onClick={handleLogout}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            <span>Logout</span>
+            Logout
           </button>
         </div>
       </div>
-      
-      <div className="space-y-8">
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-xl font-semibold mb-4">Calendar Settings</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Start Date</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full p-2 border rounded"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">End Date</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full p-2 border rounded"
-              />
-            </div>
-          </div>
-          <button
-            onClick={handleSaveSettings}
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Save Settings
-          </button>
-        </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-xl font-semibold mb-4">Window Contents</h3>
-          <div className="space-y-6">
-            {windows.map((window) => (
-              <div key={window.date} className="grid grid-cols-[1fr,2fr] gap-4">
-                <div>
-                  <p className="font-medium mb-2">
-                    {format(new Date(window.date), 'MMM dd, yyyy')}
-                  </p>
-                  <ImageUpload 
-                    onImageSelect={(imageUrl) => handleUpdateWindow(window, { imageUrl })}
-                    currentImage={window.imageUrl}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Caption (optional)</label>
-                  <input
-                    type="text"
-                    value={window.content}
-                    onChange={(e) => handleUpdateWindow(window, { content: e.target.value })}
-                    className="w-full p-2 border rounded"
-                    placeholder="Add a caption..."
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      <SettingsForm
+        startDate={startDate}
+        endDate={endDate}
+        title={title}
+        onStartDateChange={setStartDate}
+        onEndDateChange={setEndDate}
+        onTitleChange={setTitle}
+        onSave={handleSaveSettings}
+        saved={saved}
+      />
 
+      {localWindows.length > 0 && (
+        <WindowsList
+          windows={localWindows}
+          onUpdateWindow={handleUpdateWindow}
+        />
+      )}
+
+      <div className="mt-8">
         <DangerZone />
       </div>
     </div>

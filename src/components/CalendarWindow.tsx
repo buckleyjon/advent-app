@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { isBefore, isToday, format } from 'date-fns';
-import { Gift, Maximize2 } from 'lucide-react';
+import { Gift, Maximize2, ImageOff } from 'lucide-react';
 import { Modal } from './Modal';
 
 interface CalendarWindowProps {
@@ -13,6 +13,7 @@ interface CalendarWindowProps {
 
 export function CalendarWindow({ date, content, imageUrl, isOpen, onOpen }: CalendarWindowProps) {
   const [showModal, setShowModal] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const today = new Date();
   const isAvailable = isBefore(date, today) || isToday(date);
 
@@ -27,6 +28,11 @@ export function CalendarWindow({ date, content, imageUrl, isOpen, onOpen }: Cale
     setShowModal(true);
   };
 
+  const handleImageError = () => {
+    console.error('Image failed to load:', imageUrl);
+    setImageError(true);
+  };
+
   return (
     <>
       <div
@@ -37,12 +43,13 @@ export function CalendarWindow({ date, content, imageUrl, isOpen, onOpen }: Cale
       >
         {isOpen ? (
           <div className="relative h-full">
-            {imageUrl ? (
+            {imageUrl && !imageError ? (
               <>
                 <img 
                   src={imageUrl} 
-                  alt={content}
+                  alt={content || 'Calendar window content'}
                   className="w-full h-full object-cover"
+                  onError={handleImageError}
                 />
                 <button
                   onClick={handleExpandClick}
@@ -57,8 +64,9 @@ export function CalendarWindow({ date, content, imageUrl, isOpen, onOpen }: Cale
                 )}
               </>
             ) : (
-              <div className="h-full flex items-center justify-center p-4">
-                <p className="text-sm text-center">{content}</p>
+              <div className="h-full flex flex-col items-center justify-center p-4">
+                {imageError && <ImageOff className="w-8 h-8 text-gray-400 mb-2" />}
+                <p className="text-sm text-center">{content || 'No content available'}</p>
               </div>
             )}
           </div>
@@ -75,15 +83,23 @@ export function CalendarWindow({ date, content, imageUrl, isOpen, onOpen }: Cale
           <h3 className="text-xl font-semibold">
             {format(date, 'MMMM d, yyyy')}
           </h3>
-          {imageUrl && (
+          {imageUrl && !imageError ? (
             <img 
               src={imageUrl} 
-              alt={content}
+              alt={content || 'Calendar window content'}
               className="w-full rounded-lg"
+              onError={handleImageError}
             />
+          ) : (
+            imageError && (
+              <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-lg">
+                <ImageOff className="w-12 h-12 text-gray-400 mb-2" />
+                <p className="text-gray-500">Image not available</p>
+              </div>
+            )
           )}
           {content && (
-            <p className="text-gray-700 mt-4">{content}</p>
+            <p className="text-gray-700">{content}</p>
           )}
         </div>
       </Modal>

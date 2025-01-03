@@ -1,9 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
-import { compressImage } from '../lib/imageUtils';
+import { imageService } from '../lib/imageHandling/service';
 
 interface ImageUploadProps {
-  onImageSelect: (base64: string) => void;
+  onImageSelect: (imageUrl: string) => void;
   currentImage?: string;
 }
 
@@ -13,16 +13,19 @@ export function ImageUpload({ onImageSelect, currentImage }: ImageUploadProps) {
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      try {
-        setIsLoading(true);
-        const compressedImage = await compressImage(file);
-        onImageSelect(compressedImage);
-      } catch (error) {
-        console.error('Error handling image:', error);
-        alert('Error processing image. Please try a different image.');
-      } finally {
-        setIsLoading(false);
+    if (!file) return;
+
+    try {
+      setIsLoading(true);
+      const { url } = await imageService.upload(file);
+      onImageSelect(url);
+    } catch (error) {
+      console.error('Error handling image:', error);
+      alert('Error uploading image. Please try again.');
+    } finally {
+      setIsLoading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
     }
   };

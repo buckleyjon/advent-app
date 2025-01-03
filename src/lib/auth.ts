@@ -1,27 +1,41 @@
-import { storage } from './storage';
-
-const AUTH_KEY = 'auth_state';
+import { supabase } from './supabase';
 
 export interface AuthState {
   isAuthenticated: boolean;
   username: string;
 }
 
+const ADMIN_CREDENTIALS = {
+  username: 'admin@example.com',
+  password: 'admin123'
+};
+
 export const auth = {
-  login: (username: string, password: string): boolean => {
-    if (storage.verifyCredentials(username, password)) {
-      localStorage.setItem(AUTH_KEY, JSON.stringify({ isAuthenticated: true, username }));
+  login: async (username: string, password: string): Promise<boolean> => {
+    if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: username,
+        password: password,
+      });
+
+      if (error) {
+        console.error('Supabase auth error:', error);
+        return false;
+      }
+
+      localStorage.setItem('auth_state', JSON.stringify({ isAuthenticated: true, username }));
       return true;
     }
     return false;
   },
 
-  logout: (): void => {
-    localStorage.removeItem(AUTH_KEY);
+  logout: async (): Promise<void> => {
+    await supabase.auth.signOut();
+    localStorage.removeItem('auth_state');
   },
 
   getAuthState: (): AuthState => {
-    const data = localStorage.getItem(AUTH_KEY);
+    const data = localStorage.getItem('auth_state');
     return data ? JSON.parse(data) : { isAuthenticated: false, username: '' };
   }
 };

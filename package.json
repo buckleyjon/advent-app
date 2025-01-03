@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@cloudinary/react": "^1.13.0",
+    "@cloudinary/url-gen": "^1.16.1",
+    "@supabase/supabase-js": "^2.39.3",
     "browser-image-compression": "^2.0.2",
     "date-fns": "^3.3.1",
     "lucide-react": "^0.344.0",

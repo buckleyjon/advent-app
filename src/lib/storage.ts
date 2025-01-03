@@ -1,7 +1,10 @@
-// Simple storage utility for calendar data
+import { supabase } from './supabase';
+import { sanitizeImageUrl } from './imageHandling/utils';
+
 export interface CalendarSettings {
   startDate: string;
   endDate: string;
+  title: string;
 }
 
 export interface WindowContent {
@@ -10,35 +13,90 @@ export interface WindowContent {
   imageUrl?: string;
 }
 
-const ADMIN_CREDENTIALS = {
-  username: 'admin',
-  password: 'admin123'
-};
-
-const SETTINGS_KEY = 'calendar_settings';
-const WINDOWS_KEY = 'calendar_windows';
-
 export const storage = {
-  getSettings: (): CalendarSettings | null => {
-    const data = localStorage.getItem(SETTINGS_KEY);
-    return data ? JSON.parse(data) : null;
+  getSettings: async (): Promise<CalendarSettings | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('calendar_settings')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) throw error;
+      
+      if (!data) return null;
+      
+      return {
+        startDate: data.start_date,
+        endDate: data.end_date,
+        title: data.title || 'Advent Calendar'
+      };
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+      return null;
+    }
   },
 
-  saveSettings: (settings: CalendarSettings): void => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  saveSettings: async (settings: CalendarSettings): Promise<void> => {
+    try {
+      await supabase
+        .from('calendar_settings')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      const { error } = await supabase
+        .from('calendar_settings')
+        .insert({
+          start_date: settings.startDate,
+          end_date: settings.endDate,
+          title: settings.title || 'Advent Calendar'
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      throw new Error('Failed to save settings');
+    }
   },
 
-  getWindows: (): WindowContent[] => {
-    const data = localStorage.getItem(WINDOWS_KEY);
-    return data ? JSON.parse(data) : [];
+  getWindows: async (): Promise<WindowContent[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('calendar_windows')
+        .select('*')
+        .order('date');
+      
+      if (error) throw error;
+      
+      return (data || []).map(window => ({
+        date: window.date,
+        content: window.content || '',
+        imageUrl: window.image_url
+      }));
+    } catch (error) {
+      console.error('Error fetching windows:', error);
+      return [];
+    }
   },
 
-  saveWindows: (windows: WindowContent[]): void => {
-    localStorage.setItem(WINDOWS_KEY, JSON.stringify(windows));
-  },
+  saveWindows: async (windows: WindowContent[]): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from('calendar_windows')
+        .upsert(
+          windows.map(window => ({
+            date: window.date,
+            content: window.content || '',
+            image_url: window.imageUrl ? sanitizeImageUrl(window.imageUrl) : null
+          })),
+          { onConflict: 'date' }
+        );
 
-  verifyCredentials: (username: string, password: string): boolean => {
-    return username === ADMIN_CREDENTIALS.username && 
-           password === ADMIN_CREDENTIALS.password;
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving windows:', error);
+      throw new Error('Failed to save windows');
+    }
   }
 };

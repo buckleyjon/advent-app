@@ -1,13 +1,49 @@
 import React, { useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
-import { storage } from '../lib/storage';
+import { AlertTriangle, Loader2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export function DangerZone() {
   const [showConfirm, setShowConfirm] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
-  const handleReset = () => {
-    localStorage.clear();
-    window.location.reload();
+  const handleReset = async () => {
+    try {
+      setIsResetting(true);
+
+      // Delete all calendar windows
+      await supabase
+        .from('calendar_windows')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      // Delete all calendar settings
+      await supabase
+        .from('calendar_settings')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      // Delete all storage objects
+      const { data: files } = await supabase.storage
+        .from('calendar-images')
+        .list();
+
+      if (files?.length) {
+        await supabase.storage
+          .from('calendar-images')
+          .remove(files.map(file => file.name));
+      }
+
+      // Clear local storage
+      localStorage.clear();
+
+      // Reload the page
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Error resetting application:', error);
+      alert('Error resetting application. Please try again.');
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   return (
@@ -22,6 +58,7 @@ export function DangerZone() {
           <button
             onClick={() => setShowConfirm(true)}
             className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+            disabled={isResetting}
           >
             Reset Application
           </button>
@@ -31,12 +68,21 @@ export function DangerZone() {
             <div className="flex gap-3">
               <button
                 onClick={handleReset}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                disabled={isResetting}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors inline-flex items-center gap-2"
               >
-                Yes, Reset Everything
+                {isResetting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Resetting...
+                  </>
+                ) : (
+                  'Yes, Reset Everything'
+                )}
               </button>
               <button
                 onClick={() => setShowConfirm(false)}
+                disabled={isResetting}
                 className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
               >
                 Cancel
